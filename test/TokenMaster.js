@@ -116,6 +116,16 @@ describe("TokenMaster", () => {
         const SEAT = 101
         await expect(tokenMaster.connect(buyer).mint(ID, 101, { value: AMOUNT })).to.be.reverted
       })
+
+      it('Should fail if the _id is 0', async () => {
+        const ID = 0
+        await expect(tokenMaster.connect(buyer).mint(ID, SEAT, { value: AMOUNT })).to.be.reverted
+      })
+
+      it('Should fail if user doesnt have enough ether', async () => {
+        let AMOUNT = ethers.utils.parseUnits('2', 'ether')
+        await expect(tokenMaster.connect(buyer).mint(ID, SEAT, { value: 2 })).to.be.reverted
+      })
     })
   })
 
