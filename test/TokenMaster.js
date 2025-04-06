@@ -5,7 +5,7 @@ const NAME = "TokenMaster"
 const SYMBOL = "TM"
 
 const OCCASION_NAME = "ETH Texas"
-const OCCASION_COST = ethers.utils.parseUnits('1', 'ether')
+const OCCASION_COST = ethers.utils.parseUnits('10', 'ether')
 const OCCASION_MAX_TICKETS = 100
 const OCCASION_DATE = "Apr 27"
 const OCCASION_TIME = "10:00AM CST"
@@ -13,11 +13,11 @@ const OCCASION_LOCATION = "Austin, Texas"
 
 describe("TokenMaster", () => {
   let tokenMaster
-  let deployer, buyer
+  let deployer, buyer, buyer2
 
   beforeEach(async () => {
     // Setup accounts
-    [deployer, buyer] = await ethers.getSigners()
+    [deployer, buyer, buyer2, buyer3, buyer4, notOwner] = await ethers.getSigners()
 
     // Deploy contract
     const TokenMaster = await ethers.getContractFactory("TokenMaster")
@@ -70,7 +70,7 @@ describe("TokenMaster", () => {
   describe("Minting", () => {
     const ID = 1
     const SEAT = 50
-    const AMOUNT = ethers.utils.parseUnits('1', 'ether')
+    const AMOUNT = ethers.utils.parseUnits('10', 'ether')
 
 
     describe('Success', () => {
@@ -112,19 +112,26 @@ describe("TokenMaster", () => {
         await expect(tokenMaster.connect(buyer).mint(incorrectID, SEAT, { value: AMOUNT })).to.be.reverted
       })
 
-      it('Rejects incorrect seat', async () => {
-        const SEAT = 101
-        await expect(tokenMaster.connect(buyer).mint(ID, 101, { value: AMOUNT })).to.be.reverted
-      })
-
       it('Should fail if the _id is 0', async () => {
         const ID = 0
         await expect(tokenMaster.connect(buyer).mint(ID, SEAT, { value: AMOUNT })).to.be.reverted
       })
 
-      it('Should fail if user doesnt have enough ether', async () => {
-        let AMOUNT = ethers.utils.parseUnits('2', 'ether')
-        await expect(tokenMaster.connect(buyer).mint(ID, SEAT, { value: 2 })).to.be.reverted
+      it('Rejects invalid seat', async () => {
+        const SEAT = 101
+        await expect(tokenMaster.connect(buyer).mint(ID, 101, { value: AMOUNT })).to.be.reverted
+      })
+
+      it('User doesnt have enough ETH', async () => {
+        const AMOUNT = ethers.utils.parseUnits('5', 'ether')
+        await expect(tokenMaster.connect(buyer).mint(ID, SEAT, { value: AMOUNT })).to.be.reverted
+      })
+
+      it('Rejects a seat thats already taken', async () => {
+        const transaction = await tokenMaster.connect(buyer).mint(ID, SEAT, { value: AMOUNT })
+        await transaction.wait()
+        await expect(tokenMaster.connect(buyer2).mint(ID, SEAT, { value: AMOUNT })).to.be.revertedWith("Seat already taken")
+        await transaction.wait()
       })
     })
   })
@@ -132,7 +139,7 @@ describe("TokenMaster", () => {
   describe("Withdrawing", () => {
     const ID = 1
     const SEAT = 50
-    const AMOUNT = ethers.utils.parseUnits("1", 'ether')
+    const AMOUNT = ethers.utils.parseUnits("10", 'ether')
     let balanceBefore
 
     beforeEach(async () => {
@@ -145,14 +152,44 @@ describe("TokenMaster", () => {
       await transaction.wait()
     })
 
-    it('Updates the owner balance', async () => {
-      const balanceAfter = await ethers.provider.getBalance(deployer.address)
-      expect(balanceAfter).to.be.greaterThan(balanceBefore)
+    describe('Success', () => {
+      it('Updates the owner balance', async () => {
+        const balanceAfter = await ethers.provider.getBalance(deployer.address)
+        expect(balanceAfter).to.be.greaterThan(balanceBefore)
+      })
+
+      it('Updates the contract balance', async () => {
+        const balance = await ethers.provider.getBalance(tokenMaster.address)
+        expect(balance).to.equal(0)
+      })
     })
 
-    it('Updates the contract balance', async () => {
-      const balance = await ethers.provider.getBalance(tokenMaster.address)
-      expect(balance).to.equal(0)
+    describe('Failure', () => {
+      it('User other than the owner tries to withdraw', async () => {
+        await expect(tokenMaster.connect(buyer).withdraw()).to.be.reverted
+      })
+
+      it("Reverts if contract balance is zero", async () => {
+        await expect(tokenMaster.connect(deployer).withdraw()).to.be.revertedWith("Nothing to withdraw");
+      })
+    })
+  })
+
+  describe("Whitelisting addresses", () => {
+    it('Only the owner can add whitelisted addresses', async () => {
+      const addAddress = [buyer.address, buyer2.address, buyer3.address]
+      await tokenMaster.addToWhitelist(addAddress)
+
+      for (const address of addAddress) {
+        expect(await tokenMaster.whitelist(address)).to.equal(true)
+      }
+    })
+  })
+
+  describe("Removing Whitelisted Addresses", () => {
+    it('Only the owner can remove whitelisted addresses', async () => {
+      const removeAddress = [buyer.address, buyer2.address, buyer3.address]
+      await tokenMaster.removeFromWhitelist(removeAddress)
     })
   })
 })

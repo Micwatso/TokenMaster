@@ -23,6 +23,7 @@ contract TokenMaster is ERC721 {
     mapping(uint256 => mapping(address => bool)) public hasBought;
     mapping(uint256 => mapping(uint256 => address)) public seatTaken;
     mapping(uint256 => uint256[]) seatsTaken;
+    mapping(address => bool) public whitelist;
 
     modifier onlyOwner() {
         require(msg.sender == owner);
@@ -66,7 +67,7 @@ contract TokenMaster is ERC721 {
         require(msg.value >= occasions[_id].cost);
 
         // Require that the seat is not taken, and the seat exists...
-        require(seatTaken[_id][_seat] == address(0));
+        require(seatTaken[_id][_seat] == address(0), "Seat already taken");
         require(_seat <= occasions[_id].maxTickets);
 
         occasions[_id].tickets -= 1; // <-- Update ticket count
@@ -90,7 +91,20 @@ contract TokenMaster is ERC721 {
     }
 
     function withdraw() public onlyOwner {
+        require(address(this).balance > 0, "Nothing to withdraw");
         (bool success, ) = owner.call{value: address(this).balance}("");
         require(success);
+    }
+
+    function addToWhitelist(address[] calldata toAddAddresses) external onlyOwner {
+        for (uint i = 0; i < toAddAddresses.length; i++) {
+            whitelist[toAddAddresses[i]] = true;
+        }
+    }
+
+    function removeFromWhitelist(address[] calldata toRemoveAddresses) external onlyOwner {
+        for (uint i = 0; i < toRemoveAddresses.length; i++) {
+            delete whitelist[toRemoveAddresses[i]];
+        }
     }
 }
