@@ -7,6 +7,7 @@ contract TokenMaster is ERC721 {
     address public owner;
     uint256 public totalOccasions;
     uint256 public totalSupply;
+    uint256 public whitelistFee = 0.01 ether;
 
     struct Occasion {
         uint256 id;
@@ -44,7 +45,10 @@ contract TokenMaster is ERC721 {
         string memory _date,
         string memory _time,
         string memory _location
-    ) public onlyOwner {
+    ) public payable {
+        require(whitelist[msg.sender], "Not whitelisted");
+        require(msg.value == whitelistFee, "Must pay exact listing fee");
+
         totalOccasions++;
         occasions[totalOccasions] = Occasion(
             totalOccasions,
@@ -106,5 +110,15 @@ contract TokenMaster is ERC721 {
         for (uint i = 0; i < toRemoveAddresses.length; i++) {
             delete whitelist[toRemoveAddresses[i]];
         }
+    }
+
+    function payToWhitelist() external payable {
+        require(msg.value == whitelistFee, "Incorrect fee");
+        require(!whitelist[msg.sender], "Already whitelisted");
+        whitelist[msg.sender] = true;
+    }
+
+    function whitelistFunc() external {
+        require(whitelist[msg.sender], "NOT_IN_WHITELIST");
     }
 }

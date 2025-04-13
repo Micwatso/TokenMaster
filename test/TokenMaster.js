@@ -16,12 +16,18 @@ describe("TokenMaster", () => {
   let deployer, buyer, buyer2
 
   beforeEach(async () => {
-    // Setup accounts
     [deployer, buyer, buyer2, buyer3, buyer4, notOwner] = await ethers.getSigners()
 
-    // Deploy contract
     const TokenMaster = await ethers.getContractFactory("TokenMaster")
     tokenMaster = await TokenMaster.deploy(NAME, SYMBOL)
+    await tokenMaster.deployed()
+
+    await tokenMaster.addToWhitelist([
+      deployer.address,
+      buyer.address,
+      buyer2.address,
+      buyer3.address
+    ])
 
     const transaction = await tokenMaster.connect(deployer).list(
       OCCASION_NAME,
@@ -29,7 +35,8 @@ describe("TokenMaster", () => {
       OCCASION_MAX_TICKETS,
       OCCASION_DATE,
       OCCASION_TIME,
-      OCCASION_LOCATION
+      OCCASION_LOCATION,
+      { value: ethers.utils.parseEther("0.01") }
     )
 
     await transaction.wait()
@@ -75,6 +82,7 @@ describe("TokenMaster", () => {
 
     describe('Success', () => {
       beforeEach(async () => {
+        await tokenMaster.addToWhitelist([buyer.address])
         const transaction = await tokenMaster.connect(buyer).mint(ID, SEAT, { value: AMOUNT })
         await transaction.wait()
       })
@@ -102,7 +110,7 @@ describe("TokenMaster", () => {
 
       it('Updates the contract balance', async () => {
         const balance = await ethers.provider.getBalance(tokenMaster.address)
-        expect(balance).to.be.equal(AMOUNT)
+        expect(balance).to.be.equal(AMOUNT.add(ethers.utils.parseEther("0.01")))
       })
     })
 
@@ -129,9 +137,7 @@ describe("TokenMaster", () => {
 
       it('Rejects a seat thats already taken', async () => {
         const transaction = await tokenMaster.connect(buyer).mint(ID, SEAT, { value: AMOUNT })
-        await transaction.wait()
         await expect(tokenMaster.connect(buyer2).mint(ID, SEAT, { value: AMOUNT })).to.be.revertedWith("Seat already taken")
-        await transaction.wait()
       })
     })
   })
@@ -176,20 +182,86 @@ describe("TokenMaster", () => {
   })
 
   describe("Whitelisting addresses", () => {
-    it('Only the owner can add whitelisted addresses', async () => {
-      const addAddress = [buyer.address, buyer2.address, buyer3.address]
-      await tokenMaster.addToWhitelist(addAddress)
+    describe("Success", () => {
+      it('Only the owner can add whitelisted addresses', async () => {
+        const addAddress = [buyer.address, buyer2.address, buyer3.address]
+        await tokenMaster.addToWhitelist(addAddress)
 
-      for (const address of addAddress) {
-        expect(await tokenMaster.whitelist(address)).to.equal(true)
-      }
+        for (const address of addAddress) {
+          expect(await tokenMaster.whitelist(address)).to.equal(true)
+        }
+      })
+
+      it('Only the owner can remove whitelisted addresses', async () => {
+        const removeAddress = [buyer.address, buyer2.address, buyer3.address]
+        await tokenMaster.removeFromWhitelist(removeAddress)
+
+        for (let addr of removeAddress) {
+          const isWhitelisted = await tokenMaster.whitelist(addr)
+          expect(isWhitelisted).to.equal(false)
+        }
+      })
+    })
+
+    describe("Failure", () => {
+      it('Should revert if non-owner tries to add to the whitelist', async () => {
+        const addAddress = [buyer.address]
+        await expect(tokenMaster.connect(buyer).addToWhitelist(addAddress)).to.be.reverted
+      })
+
+      it('Should revert if non-owner tries to remove from whitelist', async () => {
+        const removeAddress = [buyer.address]
+        await expect(tokenMaster.connect(buyer).removeFromWhitelist(removeAddress)).to.be.reverted
+      })
     })
   })
 
-  describe("Removing Whitelisted Addresses", () => {
-    it('Only the owner can remove whitelisted addresses', async () => {
-      const removeAddress = [buyer.address, buyer2.address, buyer3.address]
-      await tokenMaster.removeFromWhitelist(removeAddress)
+  describe("User paid to be whitelisted", () => {
+    describe("Success", () => {
+      it("User paid the whitelisting fee", async () => {
+        const whitelistFee = await tokenMaster.whitelistFee()
+        const tx = await tokenMaster.connect(buyer4).payToWhitelist({ value: whitelistFee })
+        await tx.wait()
+        const isWhitelisted = await tokenMaster.whitelist(buyer.address)
+        expect(isWhitelisted).to.equal(true)
+      })
+    })
+
+    describe("Failure", () => {
+      it("Reverts if user sends incorrect ETH amount", async () => {
+        const incorrectAmount = ethers.utils.parseEther("0.02")
+        await expect(
+          tokenMaster.connect(buyer2).payToWhitelist({ value: incorrectAmount })
+        ).to.be.revertedWith("Incorrect fee")
+      })
+
+      it("Reverts if user tries to pay twice", async () => {
+        const whitelistFee = await tokenMaster.whitelistFee()
+        await tokenMaster.connect(buyer4).payToWhitelist({ value: whitelistFee })
+        await expect(
+          tokenMaster.connect(buyer4).payToWhitelist({ value: whitelistFee })
+        ).to.be.revertedWith("Already whitelisted")
+      })
+    })
+  })
+
+  describe("Using the Whitelist Function", () => {
+    beforeEach(async () => {
+      await tokenMaster.addToWhitelist([buyer.address])
+      const transaction = await tokenMaster.connect(buyer).whitelistFunc()
+      await transaction.wait()
+    })
+
+    describe("Success", () => {
+      it("Whitelisted user is able to use the function", async () => {
+        await expect(tokenMaster.connect(buyer).whitelistFunc())
+      })
+    })
+
+    describe("Failure", () => {
+      it("Does not allow user outside of the whitelist to use the function", async () => {
+        await expect(tokenMaster.connect(buyer4).whitelistFunc()).to.be.revertedWith("NOT_IN_WHITELIST")
+      })
     })
   })
 })
