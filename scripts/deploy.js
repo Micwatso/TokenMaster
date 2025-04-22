@@ -14,6 +14,8 @@ async function main() {
   const TokenMaster = await ethers.getContractFactory("TokenMaster")
   const tokenMaster = await TokenMaster.deploy(NAME, SYMBOL)
   await tokenMaster.deployed()
+  const tx = await tokenMaster.addToWhitelist([deployer.address])
+  await tx.wait()
 
   console.log(`Deployed TokenMaster Contract at: ${tokenMaster.address}\n`)
 
@@ -69,6 +71,7 @@ async function main() {
       occasions[i].date,
       occasions[i].time,
       occasions[i].location,
+      { value: await tokenMaster.whitelistFee() }
     )
 
     await transaction.wait()

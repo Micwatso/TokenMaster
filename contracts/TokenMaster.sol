@@ -46,7 +46,7 @@ contract TokenMaster is ERC721 {
         string memory _time,
         string memory _location
     ) public payable {
-        require(whitelist[msg.sender], "Not whitelisted");
+        require(whitelist[msg.sender] || msg.sender == owner, "Not whitelisted");
         require(msg.value == whitelistFee, "Must pay exact listing fee");
 
         totalOccasions++;
@@ -118,7 +118,7 @@ contract TokenMaster is ERC721 {
         whitelist[msg.sender] = true;
     }
 
-    function whitelistFunc() external {
-        require(whitelist[msg.sender], "NOT_IN_WHITELIST");
+    function isWhitelist(address _account) public view returns (bool) {
+        return whitelist[_account];
     }
 }

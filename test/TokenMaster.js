@@ -246,21 +246,17 @@ describe("TokenMaster", () => {
   })
 
   describe("Using the Whitelist Function", () => {
-    beforeEach(async () => {
-      await tokenMaster.addToWhitelist([buyer.address])
-      const transaction = await tokenMaster.connect(buyer).whitelistFunc()
-      await transaction.wait()
-    })
-
     describe("Success", () => {
       it("Whitelisted user is able to use the function", async () => {
-        await expect(tokenMaster.connect(buyer).whitelistFunc())
+        const isWhitelisted = await tokenMaster.isWhitelist(buyer.address)
+        expect(isWhitelisted).to.be.true
       })
     })
 
     describe("Failure", () => {
       it("Does not allow user outside of the whitelist to use the function", async () => {
-        await expect(tokenMaster.connect(buyer4).whitelistFunc()).to.be.revertedWith("NOT_IN_WHITELIST")
+        const isWhitelisted = await tokenMaster.isWhitelist(buyer4.address);
+        expect(isWhitelisted).to.be.false
       })
     })
   })
